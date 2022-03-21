@@ -9,6 +9,7 @@ import numpy as np
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import spsolve
 import pygmsh
+import fem_utils
 '''
 from numpy.linalg import *
 import matplotlib
@@ -17,18 +18,13 @@ import matplotlib.pyplot as plt
 from time import process_time
 '''
 
-ti.init(arch=ti.gpu)
-# Unit: m,Pa,s
-def shapeFunction(s, t):
-    N1 = (1 - s) * (1 - t) / 4
-    N2 = (1 + s) * (1 - t) / 4
-    N3 = (1 + s) * (1 + t) / 4
-    N4 = (1 - s) * (1 + t) / 4
-    N = np.array([[N1, 0, N2, 0, N3, 0, N4, 0], [0, N1, 0, N2, 0, N3, 0, N4]])
-    return N
-
 class topOpt:
     def __init__(self, points, frac):
+    
+        # x: initial, current, and final design
+        # I suggest we add design as feature of the topopt class (Suguang)
+        self.x = []
+        
         self.points = points
         self.h = 0.01     # Thickness of plate
         self.r = 0.006    # Filter radius
@@ -41,8 +37,8 @@ class topOpt:
         self.jK = np.kron(self.eleDof, np.ones((1, 6))).flatten()
 
         self.dof = 2 * self.nnode
-        self.fac = None
-        self.sum1 = None
+        self.fac = None #element volume?
+        self.sum1 = None #total volume? 
         self.neiborEle()
         self.D = np.zeros((3, 3))
         self.stiffMatrix()
@@ -57,7 +53,7 @@ class topOpt:
         '''
         # self.eleNodeList = mesh.cells[1][1]  
         # Execution of this line of code results into the following error: "Error: *** TypeError: 'CellBlock' object is not subscriptable"
-        # Is it related to the version of the packages or operating system? 
+        # Is it related to the version of the packages or operating system? (Yongpeng, Suguang) 
         # To allow the program to proceed, this line of code is modified as: self.eleNodeList=mesh.get_cells_type("triangle")
         '''
         self.eleNodeList=mesh.get_cells_type("triangle")
@@ -96,11 +92,7 @@ class topOpt:
     def stiffMatrix(self):
         E = 200000.0
         v = 0.3
-        self.D[0, 0] = E / (1 - v ** 2)
-        self.D[1, 1] = self.D[0, 0]
-        self.D[0, 1] = E * v / (1 - v ** 2)
-        self.D[1, 0] = self.D[0, 1]
-        self.D[2, 2] = E / (2 * (1 + v))
+        self.D = fem_utils.constitutive_matrix(E,v)
 
     def eleMatrixTri(self):
         pos = self.nodeList[self.eleNodeList]
@@ -154,7 +146,14 @@ class topOpt:
         return xnew
 
 if __name__ == '__main__':
+
+    # Suguang:
+    # GUI is fun when it works. It does not work for me so far.
+    # It may be not so convenient when one has to repeat one design many times. 
+    # I also suggest we support hdf5 file as input and output file for professional use.
+    
     frac = 0.25
+    ti.init(arch=ti.gpu)
     gui = ti.GUI('Topology optimization', (1600, 1600), background_color=0xFFFFFF)
 
     points=[]
