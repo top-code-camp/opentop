@@ -11,7 +11,7 @@ def shape_function(s, t):
     
 def constitutive_matrix(E,v,problem = None):
 
-    if problem == None:
+    if problem is None:
         problem = 'plane_strain'
         
     if problem == 'plane_strain':
