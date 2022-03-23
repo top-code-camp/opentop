@@ -8,6 +8,7 @@ import taichi as ti
 import numpy as np
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import spsolve
+import h5py
 import pygmsh
 import fem_utils
 '''
@@ -144,6 +145,14 @@ class topOpt:
             else:
                 l2 = lmid
         return xnew
+    
+    def save(self, x, cpNode, fdof, frac): # save the result
+        with h5py.File("topopt_result.hdf5",'w') as f:
+            f.create_dataset('points', data=self.points, compression='gzip', compression_opts=4)
+            f.create_dataset('bc', data=cpNode, compression='gzip', compression_opts=4)
+            f.create_dataset('force', data=fdof, compression='gzip', compression_opts=4)
+            f.create_dataset('density', data=x, compression='gzip', compression_opts=4)
+            f.attrs['volume_frac'] = frac
 
 if __name__ == '__main__':
 
@@ -284,3 +293,4 @@ if __name__ == '__main__':
                     change = np.linalg.norm(x - xold, np.inf)
         gui.circles(pos=nodeList1[cpNode[0:ncp], :], color=0xFF0000, radius=2)
         gui.show()
+        topIns.save(x, cpNode, fdof, frac)
