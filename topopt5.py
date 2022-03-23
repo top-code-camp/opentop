@@ -20,7 +20,7 @@ from time import process_time
 '''
 
 class topOpt:
-    def __init__(self, points, frac):
+    def __init__(self, points, frac, cpNode=None, fdof=None):
     
         # x: initial, current, and final design
         # I suggest we add design as feature of the topopt class (Suguang)
@@ -31,7 +31,8 @@ class topOpt:
         self.r = 0.006    # Filter radius
         self.p = 3        # Penalization factor for SIMP model
         self.frac = frac  # Volume fraction
-
+        self.cpNode = cpNode if cpNode is not None else None
+        self.fdof = fdof if fdof is not None else None
         self.meshGenTri() 
         # Stiffness matrix assembly parameters
         self.iK = np.kron(self.eleDof, np.ones((6, 1))).flatten()
@@ -145,14 +146,79 @@ class topOpt:
             else:
                 l2 = lmid
         return xnew
+
+    def run(self, fdof, cpNode, call_back_func):
+        self.fdof = fdof[0:nfdof].flatten()
+        self.cpNode = cpNode[0:ncp].flatten()
+        x = self.frac * np.ones(self.nele)
+        change = 1
+        loop = 0
+        # a1, b1, c1 are the vertices for triangular elements
+        a1 = nodeList1[self.eleNodeList[:, 0]]
+        b1 = nodeList1[self.eleNodeList[:, 1]]
+        c1 = nodeList1[self.eleNodeList[:, 2]]
+        while change > 0.001 :
+            loop += 1
+            xold = x
+            # start1=process_time()
+            u = topIns.FEM(x, self.fdof, self.cpNode)
+            # end1=process_time()
+            # print('FEM Time ', end1 - start1)
+            c = np.sum(u[self.fdof])
+            ce = np.transpose(u[eleDof][np.newaxis], (1, 0, 2)) @ self.KE @ np.transpose(u[eleDof][np.newaxis],
+                                                                                        (1, 2, 0))
+            ce = ce.flatten()
+            dc = (-self.p * x ** (self.p - 1)) * ce
+            dc = 5 * dc / np.abs(np.min(dc))
+            x = topIns.OC(x, dc)
+            x = topIns.check(x)
+            call_back_func(1-x) # call function to refresh screen
+            print(np.sum(x) - self.frac *self.nele)
+            print(loop)
+            self.x.append(x)
+            if abs(loop- maxloop)<1e-3:
+                print ("The program is paused because loop reaches maxloop")
+                self.save()
+                return
+            change = np.linalg.norm(x - xold, np.inf)
+        self.save()
     
-    def save(self, x, cpNode, fdof, frac): # save the result
+    def save(self): # save the result
         with h5py.File("topopt_result.hdf5",'w') as f:
             f.create_dataset('points', data=self.points, compression='gzip', compression_opts=4)
-            f.create_dataset('bc', data=cpNode, compression='gzip', compression_opts=4)
-            f.create_dataset('force', data=fdof, compression='gzip', compression_opts=4)
-            f.create_dataset('density', data=x, compression='gzip', compression_opts=4)
-            f.attrs['volume_frac'] = frac
+            f.create_dataset('bc', data=self.cpNode, compression='gzip', compression_opts=4)
+            f.create_dataset('force', data=self.fdof, compression='gzip', compression_opts=4)
+            f.create_dataset('density', data=self.x, compression='gzip', compression_opts=4)
+            f.attrs['volume_frac'] = self.frac
+
+
+class Gui(ti.GUI): # 
+    def __init__(self):
+        super().__init__('Topology optimization', (1600, 1600), background_color=0xFFFFFF)
+        self.a1 = None
+        self.b1 = None
+        self.c1 = None
+        self.ncp = 0
+
+    def set_disp_param(self, nodeList1, eleNodeList, ncp):
+         # a1, b1, c1 are the vertices for triangular elements
+        self.a1 = nodeList1[eleNodeList[:, 0]]
+        self.b1 = nodeList1[eleNodeList[:, 1]]
+        self.c1 = nodeList1[eleNodeList[:, 2]]
+        self.ncp = ncp
+
+    def disp(self, dispx): # refresh the screen
+        gui.triangles(self.a1, self.b1, self.c1, color=ti.rgb_to_hex([dispx, dispx, dispx]))
+        for i in range(self.ncp):
+            X = ti.Vector([nodeList1[self.cpNode[i], 0], nodeList1[self.cpNode[i], 1]])
+            gui.circle(pos=X, color=0xFF0000, radius=2)
+        gui.show()
+    
+    def select_bc(self):
+        pass
+    
+    def select_f(self):
+        pass
 
 if __name__ == '__main__':
 
@@ -163,7 +229,7 @@ if __name__ == '__main__':
     
     frac = 0.25
     ti.init(arch=ti.gpu)
-    gui = ti.GUI('Topology optimization', (1600, 1600), background_color=0xFFFFFF)
+    gui = Gui()
 
     points=[]
     draw = 1
@@ -205,17 +271,14 @@ if __name__ == '__main__':
     points = points[0:len(points)-1]
     # Initialize the optimization parameters
     topIns = topOpt(points, frac)
-    KE = topIns.KE
-    p = topIns.p
+    # KE = topIns.KE
+    # p = topIns.p
     eleNodeList = topIns.eleNodeList
     nodeList = topIns.nodeList
     eleCenter = topIns.eleCenter
     eleDof = topIns.eleDof
-    nd = topIns.nele
+    # nd = topIns.nele
     nnode = topIns.nnode
-    x = frac * np.ones(nd)
-    change = 1
-    loop = 0
     maxloop=50
     cpNode = np.zeros(nnode,dtype=int)  # cpNode is the nodes for definition of boundary constraints
     ncp = 0
@@ -223,13 +286,12 @@ if __name__ == '__main__':
     fdof = np.zeros(100,dtype=int)
     scale = 1
     nodeList1 = scale * nodeList
-    # a1, b1, c1 are the vertices for triangular elements
-    a1 = nodeList1[eleNodeList[:, 0]]
-    b1 = nodeList1[eleNodeList[:, 1]]
-    c1 = nodeList1[eleNodeList[:, 2]]
+    gui.set_disp_param(nodeList1, eleNodeList, ncp)
+   
     count = 0
     while True:
-        gui.triangles(a1, b1, c1, color=ti.rgb_to_hex([1 - x, 1 - x, 1 - x]))
+        dispx = 1 - topIns.x[-1] if len(topIns.x) != 0 else (1-topIns.frac)*np.ones(topIns.nele)
+        gui.triangles(gui.a1, gui.b1, gui.c1, color=ti.rgb_to_hex([dispx, dispx, dispx]))
         for e in gui.get_events(ti.GUI.PRESS):
             # Press 'LMB' (Left Mouse Button) to proceed into the selection of points for boundary and force definition
             if e.key == ti.GUI.LMB:
@@ -262,35 +324,7 @@ if __name__ == '__main__':
                     nfdof += 1
                     gui.circle(pos=ti.Vector([e.pos[0], e.pos[1]]), color=0xFF0000, radius=10)
             # Press 'r' to run the optimization program
-            elif e.key == 'r':
-                fdof = fdof[0:nfdof].flatten()
-                cpNode = cpNode[0:ncp].flatten()
-                while change > 0.001 :
-                    loop += 1
-                    xold = x
-                    # start1=process_time()
-                    u = topIns.FEM(x, fdof, cpNode)
-                    # end1=process_time()
-                    # print('FEM Time ', end1 - start1)
-                    c = np.sum(u[fdof])
-                    ce = np.transpose(u[eleDof][np.newaxis], (1, 0, 2)) @ KE @ np.transpose(u[eleDof][np.newaxis],
-                                                                                                (1, 2, 0))
-                    ce = ce.flatten()
-                    dc = (-p * x ** (p - 1)) * ce
-                    dc = 5 * dc / np.abs(np.min(dc))
-                    x = topIns.OC(x, dc)
-                    x = topIns.check(x)
-                    gui.triangles(a1, b1, c1, color=ti.rgb_to_hex([1 - x, 1 - x, 1 - x]))
-                    for i in range(ncp):
-                        X = ti.Vector([nodeList1[cpNode[i], 0], nodeList1[cpNode[i], 1]])
-                        gui.circle(pos=X, color=0xFF0000, radius=2)
-                    gui.show()
-                    print(np.sum(x) - frac * nd)
-                    print(loop)
-                    if abs(loop- maxloop)<1e-3:
-                        print ("The program is paused because loop reaches maxloop")
-                        break
-                    change = np.linalg.norm(x - xold, np.inf)
+            if e.key == 'r':
+                topIns.run(cpNode, fdof, gui.disp)
         gui.circles(pos=nodeList1[cpNode[0:ncp], :], color=0xFF0000, radius=2)
         gui.show()
-        topIns.save(x, cpNode, fdof, frac)
