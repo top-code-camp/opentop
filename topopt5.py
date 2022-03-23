@@ -153,10 +153,6 @@ class topOpt:
         x = self.frac * np.ones(self.nele)
         change = 1
         loop = 0
-        # a1, b1, c1 are the vertices for triangular elements
-        a1 = nodeList1[self.eleNodeList[:, 0]]
-        b1 = nodeList1[self.eleNodeList[:, 1]]
-        c1 = nodeList1[self.eleNodeList[:, 2]]
         while change > 0.001 :
             loop += 1
             xold = x
