@@ -74,6 +74,10 @@ if __name__ == '__main__':
    
     count = 0
     while True:
+        gui.text(content=f'Press B and click two points to select an area, within which the nodes will be fixed, press F and click to select node to apply force.',
+                 pos=(0, 0.99),
+                 font_size=30,
+                 color=0x0)
         dispx = 1 - topIns.x[-1] if len(topIns.x) != 0 else (1-topIns.frac)*np.ones(topIns.nele)
         gui.triangles(gui.a1, gui.b1, gui.c1, color=ti.rgb_to_hex([dispx, dispx, dispx]))
         for e in gui.get_events(ti.GUI.PRESS):

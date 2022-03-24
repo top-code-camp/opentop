@@ -5,7 +5,6 @@
 # The design variables are updated by OC method.
 
 # import necessary packages; If not installed, use for example "pip install taichi" to install
-import taichi as ti
 import numpy as np
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import spsolve
