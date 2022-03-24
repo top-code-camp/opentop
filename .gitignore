@@ -1,0 +1,8 @@
+# files
+*.hdf5
+
+# build output
+__pycache__
+
+# VSCode
+.vscode/
