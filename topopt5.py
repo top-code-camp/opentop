@@ -30,18 +30,20 @@ class topOpt:
         self.h = 0.01     # Thickness of plate
         self.r = 0.006    # Filter radius
         self.p = 3        # Penalization factor for SIMP model
+        self.xmin=0.001   # Lower bound for the density value (I added this, and used it in OC, Liwei)
+        self.Emin=1e-9    # Avoid possible singularity issues in the stiffness matrix (Liwei)
         self.frac = frac  # Volume fraction
-        self.cpNode = cpNode if cpNode is not None else None
-        self.fdof = fdof if fdof is not None else None
+        self.cpNode = cpNode if cpNode is not None else None # displacement BC
+        self.fdof = fdof if fdof is not None else None # force BC
         self.meshGenTri() 
-        # Stiffness matrix assembly parameters
+        # Subscript vector in assembling the sparse stiffness matrix
         self.iK = np.kron(self.eleDof, np.ones((6, 1))).flatten()
         self.jK = np.kron(self.eleDof, np.ones((1, 6))).flatten()
 
         self.dof = 2 * self.nnode
-        self.fac = None #element volume?
-        self.sum1 = None #total volume? 
-        self.neiborEle()
+        self.fac = None #element volume?  (Liwei: I think this is the numerator of the filtering operation)
+        self.sum1 = None #total volume?  ( Liwei: This should be the denominator of the filtering operation)
+        self.neiborEle() # Assemble the filter (Should we add other filtering techniques? Liwei)
         self.D = np.zeros((3, 3))
         self.stiffMatrix()
         self.KE = None
@@ -115,6 +117,8 @@ class topOpt:
         cpDof = np.sort(np.append(2 * cpNode, 2 * cpNode + 1))
         freeDof = np.setdiff1d(allDof, cpDof)
         KE1 = self.KE * np.transpose(x[np.newaxis][np.newaxis] ** self.p, (2, 1, 0))
+        # Should we use the following line to avoid singularity issues? (Liwei)
+        # KE1 = self.KE * np.transpose(self.Emin+(1.0-self.Emin)*x[np.newaxis][np.newaxis] ** self.p, (2, 1, 0)) 
         sK = KE1.flatten()
         K = csc_matrix((sK, (self.iK, self.jK)), shape=(self.dof, self.dof))
         f = np.zeros(self.dof)
@@ -138,9 +142,12 @@ class topOpt:
             lmid = (l1 + l2) / 2
             # xt = x * np.sqrt(-dc / lmid)
             # xnew[:] = np.maximum(0.001,np.maximum(x - move, np.minimum(1.0, np.minimum(x + move, x * np.sqrt(-dc / lmid)))))
-            xnew[:] = np.maximum(0.001, np.maximum(x * (1 - move), np.minimum(1.0, np.minimum(x * (1 + move),
+            #xnew[:] = np.maximum(0.001, np.maximum(x * (1 - move), np.minimum(1.0, np.minimum(x * (1 + move),
+            #                                                                                  x * np.sqrt(
+            #                                                                                      -dc / lmid)))))
+            xnew[:] = np.maximum(self.xmin, np.maximum(x * (1 - move), np.minimum(1.0, np.minimum(x * (1 + move),
                                                                                               x * np.sqrt(
-                                                                                                  -dc / lmid)))))
+                                                                                                  -dc / lmid)))))            
             if np.sum(xnew) - self.frac * self.nele > 0:
                 l1 = lmid
             else:
@@ -167,7 +174,10 @@ class topOpt:
             ce = ce.flatten()
             dc = (-self.p * x ** (self.p - 1)) * ce
             dc = 5 * dc / np.abs(np.min(dc))
-            x = self.OC(x, dc)
+            # Suggest to add the following line to apply filter on the sensitivity value, since filter is used for x. (Liwei)
+            #dc = self.check(dc)
+            # Also, we might need to explicitly write out dv, so that we could apply filter on it and use it in OC.
+            x = self.OC(x, dc) # In the future, we could include MMA to extend the code for more geenral design cases.
             x = self.check(x)
             call_back_func(1-x, self.cpNode) # call function to refresh screen
             print(np.sum(x) - self.frac *self.nele)
