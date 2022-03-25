@@ -13,6 +13,6 @@ How to get involved:
 
 Learning objectives:
 - Understand an existing code for topology optimization
-- Apply objective-oriented programming to the existing code
+- Apply Object Oriented Programming (OOP) to the existing code
 - Apply version control and cooperation using Git and Github
 - Create an open-source code for topology optimization
