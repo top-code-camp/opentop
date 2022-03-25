@@ -30,7 +30,7 @@ class topOpt:
         self.h = 0.01     # Thickness of plate
         self.r = 0.006    # Filter radius
         self.p = 3        # Penalization factor for SIMP model
-        self.xmin=0.001   # Lower bound for the density value (I added this, and used it in OC, Liwei)
+        self.xmin=0       # xmin can be zero when Emin is not zero (Suguang)
         self.Emin=1e-9    # Avoid possible singularity issues in the stiffness matrix (Liwei)
         self.frac = frac  # Volume fraction
         self.cpNode = cpNode if cpNode is not None else None # displacement BC
