@@ -7,10 +7,12 @@ from topopt5 import topOpt
 if __name__ == '__main__':
 
     # Suguang:
-    # GUI is fun when it works. It does not work for me so far.
-    # It may be not so convenient when one has to repeat one design many times. 
-    # I also suggest we support hdf5 file as input and output file for professional use.
+    # GUI is fun when it works. Many thanks to Yisi and Yuqi.
+    # GUi is not so convenient when one has to repeat one design many times. 
+    # I suggest we support also hdf5 file as input and output file for professional use.
+    # Yuqi has already done some code to save the problem and results in hdf5 files.
     
+    # volume fraction limit
     frac = 0.25
 
     ti.init(arch=ti.gpu)
@@ -65,9 +67,9 @@ if __name__ == '__main__':
     # nd = topIns.nele
     nnode = topIns.nnode  
     cpNode = np.zeros(nnode,dtype=int)  # cpNode is the nodes for definition of boundary constraints
-    ncp = 0
-    nfdof = 0
-    fdof = np.zeros(100,dtype=int)
+    ncp = 0 # the current number of all nodes in the boundary constraints. It changes after selection.
+    nfdof = 0 # the current number of all dofs in the loading conditions. It changes after selection.
+    fdof = np.zeros(100,dtype=int) # fdof is a list of dofs bearing the applied loads
     scale = 1
     nodeList1 = scale * nodeList
     gui.set_disp_param(nodeList1, eleNodeList)
@@ -108,7 +110,7 @@ if __name__ == '__main__':
                     dist1 = (pos1[1] - nodeList1[:, 1]) ** 2
                     dist = np.sqrt(dist0 + dist1)
                     idx = np.argmin(dist)
-                    fdof[nfdof] = 2 * idx + 1
+                    fdof[nfdof] = 2 * idx + 1 # Suguang: force in x-direction?
                     nfdof += 1
                     gui.circle(pos=ti.Vector([e.pos[0], e.pos[1]]), color=0xFF0000, radius=10)
             # Press 'r' to run the optimization program
